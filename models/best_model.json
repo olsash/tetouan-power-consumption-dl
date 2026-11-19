@@ -1,0 +1,41 @@
+{
+  "best_model": "LinearRegression",
+  "model_file": "linear_regression.pkl",
+  "is_sequence_model": false,
+  "window": 36,
+  "features": [
+    "Temperature",
+    "Humidity",
+    "WindSpeed",
+    "GeneralDiffuseFlows",
+    "DiffuseFlows",
+    "time_sin",
+    "time_cos",
+    "dow_sin",
+    "dow_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "Zone1_lag1d",
+    "Zone2_lag1d",
+    "Zone3_lag1d",
+    "Zone1_lag7d",
+    "Zone2_lag7d",
+    "Zone3_lag7d",
+    "Zone1_mean1d",
+    "Zone2_mean1d",
+    "Zone3_mean1d"
+  ],
+  "targets": [
+    "Zone1",
+    "Zone2",
+    "Zone3"
+  ],
+  "test_metrics": {
+    "MAE": 1104.85,
+    "RMSE": 1621.932,
+    "R2": 0.932,
+    "MAPE (%)": 4.971,
+    "Train time (s)": 0.035
+  }
+}
