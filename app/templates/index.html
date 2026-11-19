@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tetouan Power Consumption Forecast</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root { --blue:#1f4e79; --light:#eef3f8; --border:#d5dde6; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "Segoe UI", Arial, sans-serif; background:#f7f9fb; color:#222; }
+  header { background:var(--blue); color:white; padding:18px 32px; }
+  header h1 { margin:0; font-size:22px; }
+  header p { margin:4px 0 0; opacity:.85; font-size:14px; }
+  main { max-width:1200px; margin:24px auto; padding:0 20px; }
+  .card { background:white; border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:20px; }
+  .card h2 { margin:0 0 14px; font-size:18px; color:var(--blue); }
+  .row { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
+  label { display:flex; flex-direction:column; font-size:13px; gap:4px; color:#444; }
+  input { padding:7px 9px; border:1px solid var(--border); border-radius:5px; font-size:14px; width:160px; }
+  button { background:var(--blue); color:white; border:none; border-radius:5px; padding:9px 18px; font-size:14px; cursor:pointer; }
+  button:hover { opacity:.9; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { border:1px solid var(--border); padding:8px 10px; text-align:center; }
+  th { background:var(--light); }
+  .charts { display:grid; grid-template-columns:1fr; gap:16px; }
+  .chart-box { height:260px; }
+  .error { color:#b00020; font-weight:600; }
+  .muted { color:#666; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tetouan City – Day-Ahead Power Consumption Forecast</h1>
+  <p>Model in use: <b>{{ model_name }}</b> &nbsp;|&nbsp;
+     Test R²: {{ "%.3f"|format(metrics["R2"]) }} &nbsp;|&nbsp;
+     Test MAPE: {{ "%.2f"|format(metrics["MAPE (%)"]) }}%</p>
+</header>
+
+<main>
+  <!-- 1. Forecast a full day -->
+  <div class="card">
+    <h2>1. Forecast a full day (144 × 10-minute steps)</h2>
+    <div class="row">
+      <label>Date
+        <input type="date" id="day" min="{{ min_date }}" max="{{ max_date }}" value="2017-07-28">
+      </label>
+      <button onclick="forecastDay()">Forecast</button>
+      <span class="muted">Available dates: {{ min_date }} to {{ max_date }}.
+        Days 26–31 of each month are the test set (never seen during training).</span>
+    </div>
+    <p id="dayError" class="error"></p>
+    <table id="dayTable" style="display:none; margin-top:14px">
+      <thead><tr><th>Zone</th><th>Predicted energy for the day (MWh)</th><th>MAE (KW)</th><th>MAPE (%)</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="charts" style="margin-top:16px">
+      <div class="chart-box"><canvas id="chartZone1"></canvas></div>
+      <div class="chart-box"><canvas id="chartZone2"></canvas></div>
+      <div class="chart-box"><canvas id="chartZone3"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 2. Single prediction with custom weather -->
+  <div class="card">
+    <h2>2. What-if: single prediction with custom weather</h2>
+    <p class="muted">Pick a date and time, load the recorded weather, change any value (e.g. a hotter temperature) and predict.</p>
+    <div class="row">
+      <label>Date and time
+        <input type="datetime-local" id="dt" step="600" min="{{ min_date }}T00:00" max="{{ max_date }}T23:50" value="2017-07-28T20:00">
+      </label>
+      <button onclick="loadWeather()">Load recorded weather</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      {% for w in weather %}
+      <label>{{ w }} <input type="number" step="any" id="w_{{ w }}"></label>
+      {% endfor %}
+      <button onclick="predictPoint()">Predict</button>
+    </div>
+    <p id="pointError" class="error"></p>
+    <table id="pointTable" style="display:none; margin-top:14px">
+      <thead><tr><th>Zone</th><th>Predicted (KW)</th><th>Actual recorded (KW)</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const ZONES = ["Zone1", "Zone2", "Zone3"];
+const WEATHER = {{ weather|tojson }};
+const charts = {};
+
+async function forecastDay() {
+  const date = document.getElementById("day").value;
+  document.getElementById("dayError").textContent = "";
+  const res = await fetch(`/api/forecast_day?date=${date}`);
+  const data = await res.json();
+  if (data.error) { document.getElementById("dayError").textContent = data.error; return; }
+
+  const tbody = document.querySelector("#dayTable tbody");
+  tbody.innerHTML = ZONES.map(z =>
+    `<tr><td>${z}</td><td>${data.total_predicted_mwh[z]}</td><td>${data.mae[z]}</td><td>${data.mape[z]}</td></tr>`).join("");
+  document.getElementById("dayTable").style.display = "table";
+
+  ZONES.forEach(z => {
+    if (charts[z]) charts[z].destroy();
+    charts[z] = new Chart(document.getElementById("chart" + z), {
+      type: "line",
+      data: { labels: data.times, datasets: [
+        { label: "Actual", data: data.actual[z], borderColor: "#222", borderWidth: 1.5, pointRadius: 0 },
+        { label: "Predicted", data: data.predicted[z], borderColor: "#2a7de1", borderWidth: 1.5, pointRadius: 0 }
+      ]},
+      options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        plugins: { title: { display: true, text: `${z} – ${data.date}` } },
+        scales: { y: { title: { display: true, text: "KW" } }, x: { ticks: { maxTicksLimit: 12 } } } }
+    });
+  });
+}
+
+async function loadWeather() {
+  const dt = document.getElementById("dt").value.replace("T", " ");
+  document.getElementById("pointError").textContent = "";
+  const res = await fetch(`/api/weather?datetime=${encodeURIComponent(dt)}`);
+  const data = await res.json();
+  if (data.error) { document.getElementById("pointError").textContent = data.error; return; }
+  WEATHER.forEach(w => document.getElementById("w_" + w).value = data[w]);
+}
+
+async function predictPoint() {
+  const body = { datetime: document.getElementById("dt").value.replace("T", " ") };
+  WEATHER.forEach(w => body[w] = document.getElementById("w_" + w).value);
+  document.getElementById("pointError").textContent = "";
+  const res = await fetch("/api/predict", { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (data.error) { document.getElementById("pointError").textContent = data.error; return; }
+  document.querySelector("#pointTable tbody").innerHTML = ZONES.map(z =>
+    `<tr><td>${z}</td><td>${data.predicted[z]}</td><td>${data.actual[z]}</td></tr>`).join("");
+  document.getElementById("pointTable").style.display = "table";
+}
+
+forecastDay();
+loadWeather();
+</script>
+</body>
+</html>
