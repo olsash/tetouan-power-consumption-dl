@@ -1,7 +1,7 @@
 {
-  "best_model": "LinearRegression",
-  "model_file": "linear_regression.pkl",
-  "is_sequence_model": false,
+  "best_model": "LSTM",
+  "model_file": "lstm.keras",
+  "is_sequence_model": true,
   "window": 36,
   "features": [
     "Temperature",
@@ -32,10 +32,10 @@
     "Zone3"
   ],
   "test_metrics": {
-    "MAE": 1104.85,
-    "RMSE": 1621.932,
+    "MAE": 1133.38,
+    "RMSE": 1628.971,
     "R2": 0.932,
-    "MAPE (%)": 4.971,
-    "Train time (s)": 0.035
+    "MAPE (%)": 5.169,
+    "Train time (s)": 274.017
   }
 }
