@@ -4,8 +4,14 @@ Run from the project root:
     python app/app.py
 Then open http://127.0.0.1:5000 in the browser.
 """
+
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"       # hide TensorFlow info messages
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"      # turn off the oneDNN message
 import json
 from pathlib import Path
+import logging
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 import joblib
 import numpy as np
