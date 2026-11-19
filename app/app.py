@@ -32,7 +32,7 @@ target_scaler = joblib.load(MODEL_DIR / "target_scaler.pkl")
 
 model_path = MODEL_DIR / INFO["model_file"]
 if model_path.suffix == ".keras":
-    from tensorflow import keras
+    import keras
     model = keras.models.load_model(model_path)
 else:
     model = joblib.load(model_path)
